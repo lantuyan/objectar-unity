@@ -30,3 +30,6 @@ sysinfo.txt
 .DS_Store
 # máy build cục bộ (IP/SSH) — không public
 tools/win.env
+
+# AutoRefresh trigger file (tools/win.sh trigger)
+ObjectAR.trigger
