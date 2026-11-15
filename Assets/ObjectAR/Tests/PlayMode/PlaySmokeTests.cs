@@ -40,7 +40,7 @@ namespace ObjectAR.Tests
             foreach (var w in warnings) Debug.Log("[Play] warning: " + w);
         }
 
-        [UnityTest]
+        [UnityTest, Timeout(60000)]
         public IEnumerator Main_SimulationFlow_AndUI()
         {
             // 1. Giả lập: tự "quét" M1.
@@ -103,7 +103,7 @@ namespace ObjectAR.Tests
         /// và render camera chính (cả nền 3D + UI) vào RenderTexture.
         static IEnumerator Shot(string name)
         {
-            yield return new WaitForEndOfFrame();
+            yield return null;   // WaitForEndOfFrame không chạy trong batchmode; render tay nên không cần
             var cam = Camera.main;
             var canvas = Object.FindObjectsOfType<Canvas>().First(c => c.name == "ObjectAR UI");
             var rt = new RenderTexture(1080, 1920, 24);
