@@ -34,6 +34,29 @@ namespace ObjectAR.Tests
             }
         }
 
+        /// Hệ toạ độ (đã kiểm bằng mắt qua CIChecks.RenderPreview): z dữ liệu âm = phía cạnh trên mã = +z Unity;
+        /// màn hình laptop quay về người xem (-z Unity, cạnh dưới mã) và ngửa lên (nắp mở 120°).
+        [Test]
+        public void BoardNode_ConvertsArkitFrame()
+        {
+            var holder = new GameObject("holder").transform;
+            try
+            {
+                var m1 = MarkerStore.Defaults().Find(b => b.id == "M1");
+                var n1 = BoardNode.Create(m1, holder, null).transform;
+                foreach (var p in m1.placements)
+                    Assert.AreEqual(new Vector3(p.x, p.y, -p.z), n1.Find("pl-" + p.id).position, $"{p.modelID}");
+                Assert.Greater(n1.Find("pl-" + m1.placements.Single(p => p.modelID == "tree").id).position.z, 0, "cây phải ở sau mã");
+
+                var m5 = MarkerStore.Defaults().Find(b => b.id == "M5");
+                var screen = BoardNode.Create(m5, holder, null).GetComponentsInChildren<Transform>().Single(t => t.name == "Screen");
+                var facing = -screen.up;   // mặt màn hình nhìn về -y của nắp
+                Assert.Less(facing.z, -0.5f, $"màn hình không quay về người xem: {facing}");
+                Assert.Greater(facing.y, 0.2f, $"màn hình không ngửa lên: {facing}");
+            }
+            finally { Object.DestroyImmediate(holder.gameObject); }
+        }
+
         // MARK: - JSON
 
         [Test]
