@@ -37,12 +37,19 @@ namespace ObjectAR.Tests
         public void TearDown()
         {
             Application.logMessageReceived -= OnLog;
+            if (Camera.main != null) Camera.main.targetTexture = null;
+            if (target != null) Object.Destroy(target);
             foreach (var w in warnings) Debug.Log("[Play] warning: " + w);
         }
 
         [UnityTest, Timeout(60000)]
         public IEnumerator Main_SimulationFlow_AndUI()
         {
+            // 0. UI dựng xong → dàn trang dọc 1080x1920 trước khi giả lập kịp "quét" (~1s).
+            Canvas canvas = null;
+            yield return WaitFor(() => (canvas = Object.FindObjectsOfType<Canvas>().FirstOrDefault(c => c.name == "ObjectAR UI")) != null, 3, "không có Canvas UI");
+            UsePortraitTarget(canvas);
+
             // 1. Giả lập: tự "quét" M1.
             yield return WaitFor(() => MarkerManager.Instance != null && MarkerManager.Instance.ScanLocked, 6, "chưa khoá quét (giả lập)");
             var m = MarkerManager.Instance;
@@ -50,8 +57,6 @@ namespace ObjectAR.Tests
             yield return WaitFor(() => Board("M1") != null, 3, "không thấy BoardNode M1");
             yield return new WaitForSeconds(0.6f);   // hết hiệu ứng phóng to
             Assert.Greater(Board("M1").GetComponentsInChildren<Renderer>().Length, 0, "M1 không có model");
-            var canvas = Object.FindObjectsOfType<Canvas>().FirstOrDefault(c => c.name == "ObjectAR UI");
-            Assert.IsNotNull(canvas, "không có Canvas UI");
             Assert.IsTrue(Texts(canvas).Any(t => t.text == ScannedHint), "thiếu dòng hint đã nhận mã");
             yield return Shot("1-main-M1");
 
@@ -99,36 +104,35 @@ namespace ObjectAR.Tests
             }
         }
 
-        /// Chụp ở 1080x1920 dọc bất kể kích thước Game view của batchmode: tạm cho Canvas sang Screen Space Camera
-        /// và render camera chính (cả nền 3D + UI) vào RenderTexture.
-        static IEnumerator Shot(string name)
+        static RenderTexture target;
+
+        /// Batchmode có Screen 640x480 (ngang) → cho camera chính render vào RenderTexture 1080x1920 và Canvas sang
+        /// Screen Space Camera suốt bài test, để UI dàn trang như màn hình điện thoại dọc ở mọi frame.
+        static void UsePortraitTarget(Canvas canvas)
         {
-            // WaitForEndOfFrame không chạy trong batchmode (render tay nên không cần); chờ vài frame cho layout/LateUpdate xong.
-            for (var i = 0; i < 3; i++) yield return null;
             var cam = Camera.main;
-            var canvas = Object.FindObjectsOfType<Canvas>().First(c => c.name == "ObjectAR UI");
-            var rt = new RenderTexture(1080, 1920, 24);
-            var (mode, wc) = (canvas.renderMode, canvas.worldCamera);
-            cam.targetTexture = rt;
+            target = new RenderTexture(1080, 1920, 24);
+            cam.targetTexture = target;
             canvas.renderMode = RenderMode.ScreenSpaceCamera;
             canvas.worldCamera = cam;
             canvas.planeDistance = cam.nearClipPlane * 2;
-            Canvas.ForceUpdateCanvases();
-            cam.Render();
+        }
+
+        static IEnumerator Shot(string name)
+        {
+            // WaitForEndOfFrame không chạy trong batchmode; chờ vài frame cho layout/LateUpdate xong rồi render tay.
+            for (var i = 0; i < 3; i++) yield return null;
+            Camera.main.Render();
             var prev = RenderTexture.active;
-            RenderTexture.active = rt;
-            var img = new Texture2D(rt.width, rt.height, TextureFormat.RGB24, false);
-            img.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+            RenderTexture.active = target;
+            var img = new Texture2D(target.width, target.height, TextureFormat.RGB24, false);
+            img.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
             img.Apply();
             RenderTexture.active = prev;
-            canvas.renderMode = mode;
-            canvas.worldCamera = wc;
-            cam.targetTexture = null;
-            Object.Destroy(rt);
             Directory.CreateDirectory(ShotDir);
             File.WriteAllBytes(Path.Combine(ShotDir, name + ".png"), img.EncodeToPNG());
             Object.Destroy(img);
-            Debug.Log($"[Play] shot {name} (Screen {Screen.width}x{Screen.height})");
+            Debug.Log($"[Play] shot {name}");
         }
     }
 }
