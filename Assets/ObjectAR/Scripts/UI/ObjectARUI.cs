@@ -217,13 +217,18 @@ namespace ObjectAR.UI
             toastText.text = text;
             toastRect.gameObject.SetActive(true);
             toastRect.SetAsLastSibling();
-            toastRect.sizeDelta = new Vector2(Mathf.Min(toastText.preferredWidth + 72, canvasRect.rect.width - 96), toastRect.sizeDelta.y);
+            FitToast();
             if (toastCo != null) StopCoroutine(toastCo);
             toastCo = StartCoroutine(HideToast(text));
         }
 
+        void FitToast() =>
+            toastRect.sizeDelta = new Vector2(Mathf.Min(toastText.preferredWidth + 72, canvasRect.rect.width - 96), toastRect.sizeDelta.y);
+
         IEnumerator HideToast(string text)
         {
+            yield return null;
+            FitToast();   // đo lại sau 1 frame: frame đầu CanvasScaler/font chưa sẵn sàng → bề ngang đo thiếu, chữ bị xuống dòng
             yield return new WaitForSecondsRealtime(1.8f);
             toastRect.gameObject.SetActive(false);
             toastCo = null;

@@ -103,7 +103,8 @@ namespace ObjectAR.Tests
         /// và render camera chính (cả nền 3D + UI) vào RenderTexture.
         static IEnumerator Shot(string name)
         {
-            yield return null;   // WaitForEndOfFrame không chạy trong batchmode; render tay nên không cần
+            // WaitForEndOfFrame không chạy trong batchmode (render tay nên không cần); chờ vài frame cho layout/LateUpdate xong.
+            for (var i = 0; i < 3; i++) yield return null;
             var cam = Camera.main;
             var canvas = Object.FindObjectsOfType<Canvas>().First(c => c.name == "ObjectAR UI");
             var rt = new RenderTexture(1080, 1920, 24);

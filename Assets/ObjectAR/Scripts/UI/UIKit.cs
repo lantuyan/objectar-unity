@@ -228,7 +228,10 @@ namespace ObjectAR.UI
             var fill = NewPanel(fillArea, Brand, "Fill");
             fill.raycastTarget = false;
             Stretch(fill.rectTransform);
-            var handleArea = Stretch(NewRect(s, "Handle Area"), 28, 0, 28, 0);
+            // Slider kéo dãn tay cầm theo chiều cao Handle Area (anchor y 0→1) → cho vùng này cao 0, tay cầm = 56x56.
+            var handleArea = Bar(NewRect(s, "Handle Area"));
+            handleArea.offsetMin = new Vector2(28, 0);
+            handleArea.offsetMax = new Vector2(-28, 0);
             var handle = NewPanel(handleArea, Color.white, "Handle");
             var hr = handle.rectTransform;
             hr.anchorMin = hr.anchorMax = new Vector2(0, 0.5f);
