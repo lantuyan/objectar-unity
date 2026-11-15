@@ -33,7 +33,7 @@ namespace ObjectAR.EditorTools
         {
             ConfigurePlayer();
             ConfigureXR();
-            IncludeShaders("Unlit/Color", "Hidden/Internal-Colored");
+            IncludeShaders("Unlit/Color");   // Hidden/Internal-Colored (SelectionBox) nằm trong "unity default resources", luôn có — không được thêm
             AssetDatabase.SaveAssets();
             Debug.Log("[ObjectAR] ProjectSetup done.");
         }
