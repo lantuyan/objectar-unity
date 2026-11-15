@@ -2,6 +2,7 @@
     "name": "ObjectAR.Editor",
     "rootNamespace": "ObjectAR.EditorTools",
     "references": [
+        "ObjectAR.Runtime",
         "Unity.XR.ARFoundation",
         "Unity.XR.ARSubsystems",
         "Unity.XR.CoreUtils",

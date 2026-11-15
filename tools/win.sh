@@ -8,6 +8,7 @@
 #   tools/win.sh compile              open+quit WIN_CI in batchmode, report compile errors
 #   tools/win.sh test                 EditMode tests on WIN_CI, print summary + failures
 #   tools/win.sh apk [dest]           BuildScript.BuildAndroid → Builds/ObjectAR.apk (optionally scp to dest)
+#   tools/win.sh preview [dir]        CIChecks.RenderPreview with GPU (no -nographics) → PNG per board, copied to dir
 #   tools/win.sh log [n]              tail of the last batch log (default 80)
 #   tools/win.sh pull-meta            copy new/changed files under Assets/ ProjectSettings/ Packages/ from WIN_CI to this repo
 #   tools/win.sh editor-log [n]       tail of the user's interactive Editor.log
@@ -51,11 +52,11 @@ function Show-LogSummary([string]\$log, [int]\$n = 60) {
           Select-Object -ExpandProperty Line | Where-Object { \$_ -notmatch '^Start importing|^\[Performance\]' } | Select-Object -Unique -First 80
   if (\$hits) { Write-Output "----- errors / exceptions -----"; \$hits }
 }
-function Invoke-Unity([string]\$name, [string[]]\$unityArgs) {
+function Invoke-Unity([string]\$name, [string[]]\$unityArgs, [switch]\$gfx) {
   \$log = Join-Path \$LOGDIR "ci-\$name.log"
   Set-Content -Path (Join-Path \$LOGDIR 'ci-last.txt') -Value \$log
   if (Test-Path \$log) { Remove-Item \$log -Force }
-  \$all = @('-batchmode','-nographics','-stackTraceLogType','None','-projectPath', "\`"\$CI\`"", '-buildTarget', \$TARGET, '-logFile', "\`"\$log\`"") + \$unityArgs
+  \$all = @('-batchmode') + \$(if (\$gfx) { @() } else { @('-nographics') }) + @('-stackTraceLogType','None','-projectPath', "\`"\$CI\`"", '-buildTarget', \$TARGET, '-logFile', "\`"\$log\`"") + \$unityArgs
   Write-Output ("Unity " + (\$all -join ' '))
   \$sw = [Diagnostics.Stopwatch]::StartNew()
   \$p = Start-Process -FilePath \$UNITY -ArgumentList \$all -PassThru -NoNewWindow
@@ -149,6 +150,20 @@ EOF
       echo "copied to $dest"
     fi
     ;;
+  preview)
+    dest="${1:-}"
+    remote_ps <<'EOF'
+Invoke-Unity 'preview' @('-quit', '-executeMethod', 'ObjectAR.EditorTools.CIChecks.RenderPreview') -gfx
+Get-ChildItem (Join-Path $CI 'Builds\previews') -Filter *.png -ErrorAction SilentlyContinue | ForEach-Object { Write-Output ("PNG: {0}" -f $_.Name) }
+exit $global:UnityRC
+EOF
+    if [[ -n "$dest" ]]; then
+      mkdir -p "$dest"
+      ci_fwd="$(echo "$WIN_CI" | tr '\\' '/')"
+      ssh "${SSH_OPTS[@]}" "$WIN_HOST" "tar -cf - -C \"$ci_fwd/Builds/previews\" ." | tar -xf - -C "$dest"
+      echo "copied previews to $dest"
+    fi
+    ;;
   log)
     n="${1:-80}"
     remote_ps <<EOF
@@ -206,7 +221,7 @@ EOF
     remote_ps
     ;;
   help|-h|--help|*)
-    sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
     [[ "$cmd" =~ ^(help|-h|--help)$ ]] || exit 2
     ;;
 esac

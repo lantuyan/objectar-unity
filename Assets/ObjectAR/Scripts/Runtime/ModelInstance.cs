@@ -36,10 +36,8 @@ namespace ObjectAR
             s.name = "Screen";
             DestroyImmediate(s.GetComponent<Collider>());
             var r = s.GetComponent<MeshRenderer>();
-            var m = new Material(r.sharedMaterial) { name = "Screen", color = new Color(0.02f, 0.02f, 0.02f) };
-            m.SetFloat("_Glossiness", 0.88f);
-            m.SetFloat("_Metallic", 0f);
-            r.sharedMaterial = m;
+            // Unlit/Color (Always Included qua ProjectSetup) — Standard của primitive có thể bị strip khỏi build.
+            r.sharedMaterial = new Material(Shader.Find("Unlit/Color")) { name = "Screen", color = new Color(0.02f, 0.02f, 0.02f) };
             s.transform.SetParent(lid, false);
             s.transform.localPosition = new Vector3(-(sc.X0 + sc.X1) / 2, sc.Y, (sc.Z0 + sc.Z1) / 2);
             s.transform.localScale = new Vector3(sc.X1 - sc.X0, 0.2f, sc.Z1 - sc.Z0);

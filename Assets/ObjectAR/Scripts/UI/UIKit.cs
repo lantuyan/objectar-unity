@@ -60,7 +60,8 @@ namespace ObjectAR.UI
         }
 
         public static string F1(float v) => v.ToString("0.0", CultureInfo.InvariantCulture);
-        public static string ModelLabel(HouseModel h) => string.IsNullOrEmpty(h.Icon) ? h.Name : $"{h.Icon} {h.Name}";
+        // Không ghép Icon: Icon là emoji, font LegacyRuntime (Arial) không vẽ được emoji trên Android.
+        public static string ModelLabel(HouseModel h) => h.Name;
 
         // MARK: - Khung & bố cục
 

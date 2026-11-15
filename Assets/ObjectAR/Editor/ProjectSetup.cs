@@ -33,6 +33,7 @@ namespace ObjectAR.EditorTools
         {
             ConfigurePlayer();
             ConfigureXR();
+            IncludeShaders("Unlit/Color", "Hidden/Internal-Colored");
             AssetDatabase.SaveAssets();
             Debug.Log("[ObjectAR] ProjectSetup done.");
         }
@@ -75,6 +76,25 @@ namespace ObjectAR.EditorTools
                 so.ApplyModifiedProperties();
                 Debug.Log("[ObjectAR] Active Input Handling = Both (an open editor needs a restart to apply).");
             }
+        }
+
+        /// <summary>Graphics Settings > Always Included Shaders: shader runtime tạo bằng Shader.Find (SelectionBox, màn hình laptop).</summary>
+        static void IncludeShaders(params string[] names)
+        {
+            var so = new SerializedObject(GraphicsSettings.GetGraphicsSettings());
+            var arr = so.FindProperty("m_AlwaysIncludedShaders");
+            foreach (var name in names)
+            {
+                var sh = Shader.Find(name);
+                if (sh == null) { Debug.LogWarning($"[ObjectAR] Shader {name} not found"); continue; }
+                var has = false;
+                for (var i = 0; i < arr.arraySize && !has; i++) has = arr.GetArrayElementAtIndex(i).objectReferenceValue == sh;
+                if (has) continue;
+                arr.InsertArrayElementAtIndex(arr.arraySize);
+                arr.GetArrayElementAtIndex(arr.arraySize - 1).objectReferenceValue = sh;
+                Debug.Log($"[ObjectAR] Always Included Shaders += {name}");
+            }
+            so.ApplyModifiedProperties();
         }
 
         static void EnsureFolder(string path)

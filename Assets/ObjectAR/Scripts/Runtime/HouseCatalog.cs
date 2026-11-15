@@ -10,7 +10,7 @@ namespace ObjectAR
         public string Id { get; }
         public string Name { get; }
         public string File { get; }
-        public string Icon { get; }
+        public string Icon { get; }          // emoji như bản Swift — UI không hiển thị (Arial không có emoji)
         public float DefaultScale { get; }   // tỉ lệ mặc định khi đặt lên bảng (0.01 = 1:100)
         public string SpecID { get; }        // dùng ModelInstance + ModelSpecs (vd laptop: đơn vị mm, nắp, màn hình)
         public float FrontYaw { get; }       // rad, xoay để mặt trước hướng +z

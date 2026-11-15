@@ -197,7 +197,7 @@ namespace ObjectAR.UI
                         ? "Đã nhận mã QR • bấm Quét lại để quét mã khác"
                         : "Hướng camera vào mã QR";
                 warning.gameObject.SetActive(m.TrackingWarning != null);
-                warning.text = "⚠ " + m.TrackingWarning;
+                warning.text = "! " + m.TrackingWarning;   // Arial không có ⚠
                 simHint.gameObject.SetActive(m.IsSimulated && !m.ScanLocked && e == null);
                 arEditor.Root.gameObject.SetActive(e != null);
                 if (e != null) arEditor.Refresh();

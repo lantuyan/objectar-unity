@@ -1,0 +1,9 @@
+<!-- Giữ lại khi IL2CPP strip code: ZXing (encode/decode QR), Newtonsoft + kiểu dữ liệu markers.json (đọc/ghi bằng reflection). -->
+<linker>
+  <assembly fullname="zxing" preserve="all"/>
+  <assembly fullname="Newtonsoft.Json" preserve="all"/>
+  <assembly fullname="ObjectAR.Runtime">
+    <type fullname="ObjectAR.Placement" preserve="all"/>
+    <type fullname="ObjectAR.MarkerBoard" preserve="all"/>
+  </assembly>
+</linker>
