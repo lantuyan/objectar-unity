@@ -49,6 +49,7 @@ sửa code trên Mac → git commit → git push (GitHub)
 tools/win.sh sync        # Windows: git fetch + reset --hard origin/main ở cả 2 checkout
 tools/win.sh compile     # batchmode trên checkout CI, báo lỗi compile
 tools/win.sh test        # EditMode tests
+tools/win.sh test-play DIR  # PlayMode test scene Main (giả lập + UI, cần GPU), ảnh chụp 1080x1920 chép về DIR
 tools/win.sh preview DIR # render ảnh kiểm tra hệ toạ độ từng bảng (cần GPU) và chép về DIR
 tools/win.sh apk Builds/ObjectAR.apk
 tools/win.sh pull-meta   # kéo .meta / scene / settings Unity mới sinh về Mac để commit
@@ -67,6 +68,7 @@ Assets/ObjectAR/
   Editor/            ProjectSetup, SceneBuilder, BuildScript, CIChecks (VerifyModels, RenderPreview), AutoRefresh
   Resources/Models/  model .glb
   Tests/EditMode/    test khói (model, JSON, QR khớp ảnh in, đổi hệ toạ độ)
+  Tests/PlayMode/    chạy scene Main ở Play mode: giả lập quét, Quét lại, danh sách bảng, editor sơ đồ + chụp ảnh UI
 Assets/Plugins/ZXing/   zxing.dll
 Assets/Scenes/Main.unity   dựng bởi SceneBuilder
 Assets/link.xml         giữ ZXing / Newtonsoft khỏi IL2CPP stripping

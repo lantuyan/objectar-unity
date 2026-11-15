@@ -120,6 +120,7 @@ tools/win.sh sync                 # fetch + reset --hard origin/main ở cả 2 
 tools/win.sh compile              # batchmode mở+thoát CI, báo lỗi compile
 tools/win.sh batch SceneBuilder.Build   # -executeMethod (tên ngắn → ObjectAR.EditorTools.*)
 tools/win.sh test                 # EditMode tests, in tổng kết + test fail
+tools/win.sh test-play [dir]      # PlayMode (GPU): scene Main ở chế độ giả lập + ảnh UI 1080x1920 (Builds/play → dir)
 tools/win.sh apk [dest.apk]       # Builds/ObjectAR.apk (scp về nếu có dest)
 tools/win.sh log [n]              # tail log batch gần nhất
 tools/win.sh pull-meta            # kéo file mới/đổi (Assets/ ProjectSettings/ Packages/) từ CI về Mac (.meta, XR settings, scene)
@@ -128,6 +129,8 @@ tools/win.sh trigger setup|scene|refresh  # AutoRefresh trong Editor đang mở 
 ```
 Batch luôn chạy với `-buildTarget Android`. Editor đang mở có `AutoRefresh` ([InitializeOnLoad]): mỗi ~2s kiểm tra `.git/HEAD|refs/heads/main|ORIG_HEAD` đổi → `AssetDatabase.Refresh()` (cần Editor đã nạp script này một lần — lần đầu phải focus Editor).
 Kiểm tra model: `tools/win.sh batch CIChecks.VerifyModels`. Ảnh kiểm tra hệ toạ độ: `tools/win.sh preview <thư mục Mac>` (batchmode **không** `-nographics`, GPU qua SSH dùng được).
+
+PlayMode test: batchmode có Screen 640x480 ngang và `WaitForEndOfFrame` không chạy → test cho camera render vào RT 1080x1920, Canvas sang Screen Space Camera suốt bài test, chụp bằng `Camera.Render()`.
 
 ## Build (rủi ro đã xử lý)
 - `Assets/link.xml` giữ `zxing`, `Newtonsoft.Json`, `ObjectAR.Placement/MarkerBoard` khỏi IL2CPP stripping.
