@@ -7,6 +7,7 @@
 #   tools/win.sh batch <Class.Method> Unity -batchmode -quit -executeMethod on WIN_CI (short names get ObjectAR.EditorTools.)
 #   tools/win.sh compile              open+quit WIN_CI in batchmode, report compile errors
 #   tools/win.sh test                 EditMode tests on WIN_CI, print summary + failures
+#   tools/win.sh test-play [dir]      PlayMode tests with GPU (scene Main, simulation) → screenshots Builds/play, copied to dir
 #   tools/win.sh apk [dest]           BuildScript.BuildAndroid → Builds/ObjectAR.apk (optionally scp to dest)
 #   tools/win.sh preview [dir]        CIChecks.RenderPreview with GPU (no -nographics) → PNG per board, copied to dir
 #   tools/win.sh log [n]              tail of the last batch log (default 80)
@@ -71,6 +72,27 @@ EOF
   } | ssh "${SSH_OPTS[@]}" "$WIN_HOST" 'powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$s=[Console]::In.ReadToEnd(); & ([scriptblock]::Create($s)); exit $LASTEXITCODE"'
 }
 
+# run_tests <EditMode|PlayMode> [-gfx] — chạy test trên WIN_CI, in tổng kết + test fail.
+run_tests() {
+  local gfx='$false'; [[ "${2:-}" == -gfx ]] && gfx='$true'
+  { echo "\$PLATFORM = '$1'"; echo "\$GFX = $gfx"; cat <<'EOF'
+$xml = Join-Path $LOGDIR "$PLATFORM-results.xml"
+if (Test-Path $xml) { Remove-Item $xml -Force }
+if ($PLATFORM -eq 'PlayMode') { Remove-Item (Join-Path $CI 'Builds\play') -Recurse -Force -ErrorAction SilentlyContinue }
+Invoke-Unity "test-$PLATFORM" @('-runTests', '-testPlatform', $PLATFORM, '-testResults', "`"$xml`"") -gfx:$GFX
+if (Test-Path $xml) {
+  [xml]$r = Get-Content $xml -Encoding UTF8
+  $run = $r.'test-run'
+  Write-Output ("----- tests: total={0} passed={1} failed={2} skipped={3} result={4}" -f $run.total, $run.passed, $run.failed, $run.skipped, $run.result)
+  foreach ($tc in $r.SelectNodes("//test-case[@result='Failed']")) {
+    Write-Output ("FAIL {0}`n  {1}" -f $tc.fullname, ($tc.failure.message.'#cdata-section' -replace "`n", "`n  "))
+  }
+} else { Write-Output "no test results xml (compile error?)" }
+exit $global:UnityRC
+EOF
+  } | remote_ps
+}
+
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   init)
@@ -122,20 +144,17 @@ exit $global:UnityRC
 EOF
     ;;
   test)
-    remote_ps <<'EOF'
-$xml = Join-Path $LOGDIR 'editmode-results.xml'
-if (Test-Path $xml) { Remove-Item $xml -Force }
-Invoke-Unity 'test' @('-runTests', '-testPlatform', 'EditMode', '-testResults', "`"$xml`"")
-if (Test-Path $xml) {
-  [xml]$r = Get-Content $xml -Encoding UTF8
-  $run = $r.'test-run'
-  Write-Output ("----- tests: total={0} passed={1} failed={2} skipped={3} result={4}" -f $run.total, $run.passed, $run.failed, $run.skipped, $run.result)
-  foreach ($tc in $r.SelectNodes("//test-case[@result='Failed']")) {
-    Write-Output ("FAIL {0}`n  {1}" -f $tc.fullname, ($tc.failure.message.'#cdata-section' -replace "`n", "`n  "))
-  }
-} else { Write-Output "no test results xml (compile error?)" }
-exit $global:UnityRC
-EOF
+    run_tests EditMode
+    ;;
+  test-play)
+    dest="${1:-}"
+    run_tests PlayMode -gfx
+    if [[ -n "$dest" ]]; then
+      mkdir -p "$dest"
+      ci_fwd="$(echo "$WIN_CI" | tr '\\' '/')"
+      ssh "${SSH_OPTS[@]}" "$WIN_HOST" "tar -cf - -C \"$ci_fwd/Builds/play\" ." | tar -xf - -C "$dest"
+      echo "copied screenshots to $dest"
+    fi
     ;;
   apk)
     dest="${1:-}"
