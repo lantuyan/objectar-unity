@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Unity.Collections;
+using Unity.Jobs;
 using Unity.XR.CoreUtils;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
@@ -26,11 +27,13 @@ namespace ObjectAR
         ARCameraManager cameraManager;
         XROrigin origin;
         Camera cam;
-        readonly List<(string id, AddReferenceImageJobState job)> jobs = new();
-        readonly List<Texture2D> refTextures = new();
+        sealed class AddJob { public string ID; public float WidthM; public Texture2D Tex; public AddReferenceImageJobState State; public int Tries; }
+        readonly List<AddJob> jobs = new();
+        MutableRuntimeReferenceImageLibrary library;
+        JobHandle lastAdd;            // nối các job thêm ảnh: ARCore không an toàn khi thêm song song vào cùng database
+        const int AddTries = 3;
         bool arReady;
         int sessionGen;            // tăng mỗi lần chạy lại session → bỏ kết quả bất đồng bộ cũ
-        const float LockSettle = 1f;   // giây cho ARCore tinh chỉnh tư thế mã trước khi tắt dò ảnh
 
         Transform WorldParent => origin != null ? origin.TrackablesParent : null;
 
@@ -72,20 +75,31 @@ namespace ObjectAR
             if (IsSimulated) SimulateScan();
             else if (arReady)
             {
+                images.enabled = false;
                 session.Reset();
-                var lib = BuildLibrary();
-                if (lib != null) { images.referenceLibrary = lib; images.enabled = true; }
+                StartCoroutine(LoadLibrary(sessionGen));
             }
             Notify();
+        }
+
+        /// session.Reset() trên ARCore tạo lại ArSession ở các frame sau; thêm ảnh ngay lúc đó thì job đầu tiên
+        /// (bảng M1) bị lỗi. Chờ session chạy lại rồi mới dựng thư viện.
+        IEnumerator LoadLibrary(int gen)
+        {
+            var t0 = Time.realtimeSinceStartup;
+            yield return null;
+            yield return new WaitForSecondsRealtime(0.3f);
+            while (ARSession.state < ARSessionState.SessionInitializing && Time.realtimeSinceStartup - t0 < 5f) yield return null;
+            if (gen != sessionGen) yield break;
+            var lib = BuildLibrary();
+            if (lib != null) { images.referenceLibrary = lib; images.enabled = true; }
         }
 
         /// Thư viện ảnh runtime: mỗi bảng 1 ảnh QR, tên = boardID, cạnh thật = widthCm (ARKit bắt buộc có kích thước).
         MutableRuntimeReferenceImageLibrary BuildLibrary()
         {
-            // Job đã chép dữ liệu ảnh nên huỷ texture cũ được ngay.
-            foreach (var t in refTextures) NodeUtil.Kill(t);
-            refTextures.Clear();
-            jobs.Clear();
+            ClearJobs();
+            library = null;
             try
             {
                 if (images.CreateRuntimeLibrary() is not MutableRuntimeReferenceImageLibrary lib)
@@ -93,12 +107,14 @@ namespace ObjectAR
                     Toast = "Thiết bị không hỗ trợ thêm mã QR lúc chạy";
                     return null;
                 }
+                library = lib;
                 foreach (var b in Boards)
                 {
                     var tex = QRMaker.ReferenceTexture(b.payload);
                     if (tex == null) continue;
-                    refTextures.Add(tex);
-                    jobs.Add((b.id, lib.ScheduleAddImageWithValidationJob(tex, b.id, Mathf.Max(b.widthCm, 0.5f) / 100f)));
+                    var j = new AddJob { ID = b.id, WidthM = Mathf.Max(b.widthCm, 0.5f) / 100f, Tex = tex };
+                    jobs.Add(j);
+                    Schedule(j);
                 }
                 return lib;
             }
@@ -110,21 +126,43 @@ namespace ObjectAR
             }
         }
 
-        /// ARCore có thể từ chối ảnh ít đặc trưng → log trạng thái và báo Toast.
+        void Schedule(AddJob j)
+        {
+            j.Tries++;
+            j.State = library.ScheduleAddImageWithValidationJob(j.Tex, j.ID, j.WidthM, lastAdd);
+            lastAdd = j.State.jobHandle;
+        }
+
+        void ClearJobs()
+        {
+            // Job đã chép dữ liệu ảnh khi được lên lịch nên huỷ texture được ngay.
+            foreach (var j in jobs) NodeUtil.Kill(j.Tex);
+            jobs.Clear();
+            lastAdd = default;
+        }
+
+        /// Ảnh bị từ chối → thử thêm lại (lỗi thoáng qua của ARCore), hết lượt mới log + báo Toast.
         void PollJobs()
         {
             for (var i = jobs.Count - 1; i >= 0; i--)
             {
-                var (id, job) = jobs[i];
-                var st = job.status;
+                var j = jobs[i];
+                var st = j.State.status;
                 if (st.IsPending()) continue;
+                if (st.IsError() && j.Tries < AddTries && library != null)
+                {
+                    Debug.LogWarning($"[ObjectAR] Ảnh tham chiếu {j.ID}: {st}, thử lại lần {j.Tries + 1}");
+                    Schedule(j);
+                    continue;
+                }
                 jobs.RemoveAt(i);
+                NodeUtil.Kill(j.Tex);
                 if (st.IsError())
                 {
-                    Debug.LogWarning($"[ObjectAR] Ảnh tham chiếu {id}: {st}");
-                    Toast = $"Mã {id} không dùng được để dò ({st})";
+                    Debug.LogWarning($"[ObjectAR] Ảnh tham chiếu {j.ID}: {st}");
+                    Toast = $"Mã {j.ID} không dùng được để dò ({st})";
                 }
-                else Debug.Log($"[ObjectAR] Ảnh tham chiếu {id}: {st}");
+                else Debug.Log($"[ObjectAR] Ảnh tham chiếu {j.ID}: {st} (lần {j.Tries})");
             }
         }
 
@@ -143,16 +181,21 @@ namespace ObjectAR
             }
         }
 
-        void OnAdded(ARTrackedImage img)
+        void OnAdded(ARTrackedImage img) => TryFound(img);
+
+        /// Chỉ nhận mã khi ARCore đã khởi tạo xong world tracking và đang thấy mã thật (Tracking, không phải
+        /// LastKnownPose). Nhận sớm hơn thì holder neo vào hệ toạ độ thế giới chưa ổn định → model trôi.
+        void TryFound(ARTrackedImage img)
         {
-            if (ScanLocked) return;
+            if (ScanLocked || img.trackingState != TrackingState.Tracking) return;
+            if (ARSession.state != ARSessionState.SessionTracking) return;
             var key = img.trackableId.ToString();
             if (Found(key, img.referenceImage.name, img.transform.position, img.transform.rotation)) Verify(key);
         }
 
         void OnUpdated(ARTrackedImage img)
         {
-            if (!tracked.TryGetValue(img.trackableId.ToString(), out var t)) return;
+            if (!tracked.TryGetValue(img.trackableId.ToString(), out var t)) { TryFound(img); return; }
             var ok = img.trackingState == TrackingState.Tracking;
             // Chỉ cập nhật vị trí khi đang thấy mã; khi mất mã, model đứng yên nhờ world tracking.
             if (ok)
@@ -181,17 +224,11 @@ namespace ObjectAR
             bn.Appear();
             tracked[key] = new Tracked { Holder = holder, Node = bn, BoardID = b.id };
             visible[b.id] = true;
+            // Khoá quét = không nhận mã khác nữa. Không tắt dò ảnh như bản ARKit: ARCore cần vài giây để tinh chỉnh
+            // tư thế + kích thước mã, tắt sớm sẽ đóng băng tư thế sai. Mã còn trong khung hình thì model bám theo mã.
             ScanLocked = true;
-            if (!IsSimulated) StartCoroutine(StopDetection(sessionGen));
             Notify();
             return true;
-        }
-
-        /// Khoá quét: chạy tiếp world tracking nhưng tắt dò ảnh (sau LockSettle để ARCore tinh chỉnh tư thế).
-        IEnumerator StopDetection(int gen)
-        {
-            yield return new WaitForSeconds(LockSettle);
-            if (gen == sessionGen && ScanLocked && images != null) images.enabled = false;
         }
 
         void UpdateWarning()
