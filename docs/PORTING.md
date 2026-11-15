@@ -53,7 +53,7 @@ outer
  └ orient   localRotation = Euler(0, 180 - frontYawDeg, 0)
     └ content (bản instantiate glTF; với ModelInstance: localScale = unitScale) dời sao cho tâm-đáy bounds (của baseNode nếu có) về gốc
 ```
-Laptop (ModelSpec): nắp `lid.localRotation = AngleAxis(-lidDeg, Vector3.forward)` (dấu đảo vì đảo trục X); màn hình = Cube mỏng đen (`(x1-x0) × 0.2 × (z1-z0)` đơn vị file) đặt tại `(-(x0+x1)/2, y, (z0+z1)/2)` trong toạ độ lid. Kiểm chứng bằng mắt nếu được (nắp mở về phía sau, màn hình quay về phía trước).
+Laptop (ModelSpec): nắp `lid.localRotation = AngleAxis(-lidDeg, Vector3.forward)` (dấu đảo vì đảo trục X); màn hình = Cube mỏng đen (`(x1-x0) × 0.2 × (z1-z0)` đơn vị file) đặt tại `(-(x0+x1)/2, y, (z0+z1)/2)` trong toạ độ lid. Đã kiểm chứng bằng mắt (`tools/win.sh preview` → `CIChecks.RenderPreview`, ảnh từng bảng nhìn từ phía cạnh dưới mã và từ trên) và khoá bằng test `BoardNode_ConvertsArkitFrame`.
 
 ## Runtime API (namespace ObjectAR) — UI chỉ dùng những gì ở đây
 ```csharp
@@ -127,7 +127,12 @@ tools/win.sh editor-log [n]       # tail Editor.log của Editor người dùng 
 tools/win.sh trigger setup|scene|refresh  # AutoRefresh trong Editor đang mở sẽ chạy lệnh này
 ```
 Batch luôn chạy với `-buildTarget Android`. Editor đang mở có `AutoRefresh` ([InitializeOnLoad]): mỗi ~2s kiểm tra `.git/HEAD|refs/heads/main|ORIG_HEAD` đổi → `AssetDatabase.Refresh()` (cần Editor đã nạp script này một lần — lần đầu phải focus Editor).
-Kiểm tra model: `tools/win.sh batch CIChecks.VerifyModels`.
+Kiểm tra model: `tools/win.sh batch CIChecks.VerifyModels`. Ảnh kiểm tra hệ toạ độ: `tools/win.sh preview <thư mục Mac>` (batchmode **không** `-nographics`, GPU qua SSH dùng được).
+
+## Build (rủi ro đã xử lý)
+- `Assets/link.xml` giữ `zxing`, `Newtonsoft.Json`, `ObjectAR.Placement/MarkerBoard` khỏi IL2CPP stripping.
+- `ProjectSetup` thêm `Unlit/Color` vào Always Included Shaders (màn hình laptop). `Hidden/Internal-Colored` (SelectionBox) nằm trong "unity default resources", luôn có — **không** được thêm (build lỗi DontSave).
+- Font Arial không có emoji → UI không hiện `HouseModel.Icon`; "⚠" thay bằng "!" (● ▼ ↓ • có trong Arial).
 
 ## QR khớp ảnh in (CoreImage ↔ ZXing)
 CIQRCodeGenerator chia đoạn tối ưu (`OBJECTAR:Mn:` alphanumeric + phần còn lại byte) → ZXing phải bật `QR_COMPACT` mới ra cùng codeword.
