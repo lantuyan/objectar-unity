@@ -108,3 +108,18 @@ Không commit IP. `tools/win.sh` đọc `tools/win.env` (gitignored): `WIN_HOST=
 - `D:\Dev\UnityProject\Test_AR\TT_TGOSHI_ci` — checkout cho batchmode (compile, test, build APK).
 - Unity: `C:\Program Files\Unity\Hub\Editor\2022.3.17f1\Editor\Unity.exe`.
 Mac là nơi code; luồng: sửa trên Mac → commit → push GitHub → Windows fetch/reset → Unity batchmode → kéo log + file .meta mới sinh về Mac → commit.
+
+### tools/win.sh (Mac → Windows)
+```
+tools/win.sh sync                 # fetch + reset --hard origin/main ở cả 2 checkout, in HEAD
+tools/win.sh compile              # batchmode mở+thoát CI, báo lỗi compile
+tools/win.sh batch SceneBuilder.Build   # -executeMethod (tên ngắn → ObjectAR.EditorTools.*)
+tools/win.sh test                 # EditMode tests, in tổng kết + test fail
+tools/win.sh apk [dest.apk]       # Builds/ObjectAR.apk (scp về nếu có dest)
+tools/win.sh log [n]              # tail log batch gần nhất
+tools/win.sh pull-meta            # kéo file mới/đổi (Assets/ ProjectSettings/ Packages/) từ CI về Mac (.meta, XR settings, scene)
+tools/win.sh editor-log [n]       # tail Editor.log của Editor người dùng đang mở
+tools/win.sh trigger setup|scene|refresh  # AutoRefresh trong Editor đang mở sẽ chạy lệnh này
+```
+Batch luôn chạy với `-buildTarget Android`. Editor đang mở có `AutoRefresh` ([InitializeOnLoad]): mỗi ~2s kiểm tra `.git/HEAD|refs/heads/main|ORIG_HEAD` đổi → `AssetDatabase.Refresh()` (cần Editor đã nạp script này một lần — lần đầu phải focus Editor).
+Kiểm tra model: `tools/win.sh batch CIChecks.VerifyModels`.

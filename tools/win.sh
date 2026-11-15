@@ -2,7 +2,7 @@
 # Drive the Windows Unity build machine over SSH.
 # Config (gitignored): tools/win.env  →  WIN_HOST=USER@host  [WIN_PROJ, WIN_CI, WIN_UNITY, WIN_TARGET]
 #
-#   tools/win.sh init                 one-time: turn WIN_PROJ into a git checkout (keeps Library/), clone WIN_CI
+#   tools/win.sh init [ci|all]        one-time: make WIN_PROJ / WIN_CI git checkouts in place (keeps Library/)
 #   tools/win.sh sync                 git fetch + reset --hard origin/main on both checkouts, print HEAD
 #   tools/win.sh batch <Class.Method> Unity -batchmode -quit -executeMethod on WIN_CI (short names get ObjectAR.EditorTools.)
 #   tools/win.sh compile              open+quit WIN_CI in batchmode, report compile errors
@@ -46,16 +46,16 @@ New-Item -ItemType Directory -Force -Path \$LOGDIR | Out-Null
 function Show-LogSummary([string]\$log, [int]\$n = 60) {
   if (-not (Test-Path \$log)) { Write-Output "(no log at \$log)"; return }
   Write-Output "----- tail \$n of \$log -----"
-  Get-Content \$log -Tail \$n -Encoding UTF8
-  \$hits = Select-String -Path \$log -Encoding UTF8 -Pattern 'error CS\d+|Exception|\[ObjectAR\].*(FAILED|Error)|BuildFailedException|Compilation failed' |
-          Select-Object -ExpandProperty Line | Select-Object -Unique -First 80
+  Get-Content \$log -Encoding UTF8 | Where-Object { \$_ -notmatch '^\[Performance\]' -and \$_.Trim() -ne '' } | Select-Object -Last \$n
+  \$hits = Select-String -Path \$log -Encoding UTF8 -Pattern 'error CS\d+|Exception:|Exception\b.*at |\[ObjectAR\].*(FAILED|Error)|BuildFailedException|Compilation failed|Scripts have compiler errors|An error occurred' |
+          Select-Object -ExpandProperty Line | Where-Object { \$_ -notmatch '^Start importing|^\[Performance\]' } | Select-Object -Unique -First 80
   if (\$hits) { Write-Output "----- errors / exceptions -----"; \$hits }
 }
 function Invoke-Unity([string]\$name, [string[]]\$unityArgs) {
   \$log = Join-Path \$LOGDIR "ci-\$name.log"
   Set-Content -Path (Join-Path \$LOGDIR 'ci-last.txt') -Value \$log
   if (Test-Path \$log) { Remove-Item \$log -Force }
-  \$all = @('-batchmode','-nographics','-projectPath', "\`"\$CI\`"", '-buildTarget', \$TARGET, '-logFile', "\`"\$log\`"") + \$unityArgs
+  \$all = @('-batchmode','-nographics','-stackTraceLogType','None','-projectPath', "\`"\$CI\`"", '-buildTarget', \$TARGET, '-logFile', "\`"\$log\`"") + \$unityArgs
   Write-Output ("Unity " + (\$all -join ' '))
   \$sw = [Diagnostics.Stopwatch]::StartNew()
   \$p = Start-Process -FilePath \$UNITY -ArgumentList \$all -PassThru -NoNewWindow
@@ -73,24 +73,23 @@ EOF
 cmd="${1:-help}"; shift || true
 case "$cmd" in
   init)
-    remote_ps <<'EOF'
-# User checkout: convert in place (editor may be open — never touch Library/, never kill Unity)
-if (-not (Test-Path (Join-Path $PROJ '.git'))) {
-  git -C $PROJ init -q -b main
-  git -C $PROJ remote add origin $REMOTE
-  Write-Output "initialized git in $PROJ"
+    # init [ci|all] — default all. Converts folders in place (git init + fetch + reset --hard), keeping Library/.
+    which="${1:-all}"
+    remote_ps <<EOF
+\$targets = if ('$which' -eq 'ci') { @(\$CI) } else { @(\$PROJ, \$CI) }
+foreach (\$p in \$targets) {
+  New-Item -ItemType Directory -Force -Path \$p | Out-Null
+  if (-not (Test-Path (Join-Path \$p '.git'))) {
+    git -C \$p init -q -b main
+    git -C \$p remote add origin \$REMOTE
+    Write-Output "initialized git in \$p"
+  }
+  git -C \$p config core.autocrlf false
+  git -C \$p fetch -q origin
+  git -C \$p reset -q --hard origin/main
+  git -C \$p branch -q --set-upstream-to=origin/main main
+  Write-Output ("{0}: {1}" -f \$p, (git -C \$p log -1 --oneline))
 }
-git -C $PROJ config core.autocrlf false
-git -C $PROJ fetch -q origin
-git -C $PROJ reset -q --hard origin/main
-git -C $PROJ branch -q --set-upstream-to=origin/main main 2>$null
-# CI checkout
-if (-not (Test-Path (Join-Path $CI '.git'))) {
-  git -c core.autocrlf=false clone -q $REMOTE $CI
-  git -C $CI config core.autocrlf false
-  Write-Output "cloned $CI"
-}
-foreach ($p in @($PROJ, $CI)) { Write-Output ("{0}: {1}" -f $p, (git -C $p log -1 --oneline)) }
 EOF
     ;;
   sync)
